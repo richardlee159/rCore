@@ -11,12 +11,12 @@ pub fn sys_write(fd: usize, buf: *const u8, len: usize) -> isize {
                 print!("{}", str);
                 len as isize
             } else {
-                info!("Illegal memory region in sys_write!");
+                warn!("Illegal memory region in sys_write!");
                 -1
             }
         }
         _ => {
-            info!("Unsupported fd in sys_write!");
+            warn!("Unsupported fd in sys_write!");
             -1
         }
     }
