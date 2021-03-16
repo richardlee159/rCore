@@ -44,6 +44,12 @@ impl UserStack {
     fn get_sp(&self) -> usize {
         self.data.as_ptr() as usize + USER_STACK_SIZE
     }
+
+    fn contain(&self, data: &[u8]) -> bool {
+        let stack_ptr = self.data.as_ptr() as usize;
+        let data_ptr = data.as_ptr() as usize;
+        (stack_ptr <= data_ptr) && (stack_ptr + USER_STACK_SIZE >= data_ptr + data.len())
+    }
 }
 
 struct AppManager {
@@ -137,4 +143,13 @@ pub fn run_next_app() -> ! {
             USER_STACK.get_sp(),
         )) as *const _ as usize)
     }
+}
+
+fn within_app_space(data: &[u8]) -> bool {
+    let data_ptr = data.as_ptr() as usize;
+    (APP_BASE_ADDRESS <= data_ptr) && (APP_BASE_ADDRESS + APP_SIZE_LIMIT >= data_ptr + data.len())
+}
+
+pub fn within_user_space(data: &[u8]) -> bool {
+    within_app_space(data) || USER_STACK.contain(data)
 }
