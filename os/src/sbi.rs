@@ -1,3 +1,4 @@
+const SBI_SET_TIMER: usize = 0;
 const SBI_CONSOLE_PUTCHAR: usize = 1;
 const SBI_SHUTDOWN: usize = 8;
 
@@ -13,6 +14,10 @@ fn sbi_call(id: usize, args: [usize; 3]) -> usize {
         );
     }
     ret
+}
+
+pub fn set_timer(timer: usize) {
+    sbi_call(SBI_SET_TIMER, [timer, 0, 0]);
 }
 
 pub fn console_putchar(c: usize) {

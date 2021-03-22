@@ -4,6 +4,7 @@ mod task;
 
 use crate::config::MAX_APP_NUM;
 use crate::loader::{get_num_app, init_app_ctx};
+use crate::timer::set_next_trigger;
 pub use context::TaskContext;
 use core::{cell::RefCell, mem};
 use lazy_static::lazy_static;
@@ -48,6 +49,7 @@ impl TaskManager {
         self.inner.borrow_mut().tasks[0].task_status = TaskStatus::Running;
         let next_task_ctx_ptr2 = self.inner.borrow().tasks[0].get_task_ctx_ptr2();
         let _unused: usize = 0;
+        set_next_trigger();
         unsafe {
             __switch(&_unused as *const _, next_task_ctx_ptr2);
         }
@@ -82,6 +84,7 @@ impl TaskManager {
             let current_task_ctx_ptr2 = inner.tasks[current].get_task_ctx_ptr2();
             let next_task_ctx_ptr2 = inner.tasks[next].get_task_ctx_ptr2();
             mem::drop(inner);
+            set_next_trigger();
             unsafe {
                 __switch(current_task_ctx_ptr2, next_task_ctx_ptr2);
             }
