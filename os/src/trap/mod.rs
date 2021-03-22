@@ -1,7 +1,7 @@
 mod context;
 
-use crate::batch;
 use crate::syscall::syscall;
+use crate::task::exit_current_and_run_next;
 pub use context::TrapContext;
 use riscv::register::{
     mtvec::TrapMode,
@@ -31,11 +31,11 @@ pub fn trap_handler(ctx: &mut TrapContext) -> &mut TrapContext {
         }
         Trap::Exception(Exception::StoreFault) | Trap::Exception(Exception::StorePageFault) => {
             warn!("PageFault in application, core dumped.");
-            batch::run_next_app();
+            exit_current_and_run_next();
         }
         Trap::Exception(Exception::IllegalInstruction) => {
             warn!("IllegalInstruction in application, core dumped.");
-            batch::run_next_app();
+            exit_current_and_run_next();
         }
         _ => {
             panic!(

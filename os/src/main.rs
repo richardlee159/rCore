@@ -3,17 +3,20 @@
 #![feature(llvm_asm)]
 #![feature(global_asm)]
 #![feature(panic_info_message)]
+#![feature(const_in_array_repeat_expressions)]
 
 #[macro_use]
 extern crate log;
 
 #[macro_use]
 mod console;
-mod batch;
+mod config;
 mod lang_items;
+mod loader;
 mod logging;
 mod sbi;
 mod syscall;
+mod task;
 mod trap;
 
 global_asm!(include_str!("entry.asm"));
@@ -27,8 +30,9 @@ pub fn rust_main() -> ! {
     print_mem_layout();
 
     trap::init();
-    batch::init();
-    batch::run_next_app();
+    loader::load_apps();
+    task::run_first_task();
+    panic!("Unreachable in rust_main!");
 }
 
 fn clear_bss() {
