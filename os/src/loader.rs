@@ -41,10 +41,9 @@ impl UserStack {
         self.data.as_ptr() as usize + USER_STACK_SIZE
     }
 
-    fn contain(&self, data: &[u8]) -> bool {
+    fn contain(&self, ptr: usize, len: usize) -> bool {
         let stack_ptr = self.data.as_ptr() as usize;
-        let data_ptr = data.as_ptr() as usize;
-        (stack_ptr <= data_ptr) && (stack_ptr + USER_STACK_SIZE >= data_ptr + data.len())
+        (stack_ptr <= ptr) && (stack_ptr + USER_STACK_SIZE >= ptr + len)
     }
 }
 
@@ -93,11 +92,10 @@ pub fn init_app_ctx(app_id: usize) -> &'static mut TaskContext {
     )
 }
 
-fn within_app_space(app_id: usize, data: &[u8]) -> bool {
-    let data_ptr = data.as_ptr() as usize;
-    (get_base_i(app_id) <= data_ptr) && (get_base_i(app_id) + APP_SIZE_LIMIT >= data_ptr + data.len())
+fn within_app_space(app_id: usize, ptr: usize, len: usize) -> bool {
+    (get_base_i(app_id) <= ptr) && (get_base_i(app_id) + APP_SIZE_LIMIT >= ptr + len)
 }
 
-pub fn within_user_space(app_id: usize, data: &[u8]) -> bool {
-    within_app_space(app_id, data) || USER_STACKS[app_id].contain(data)
+pub fn within_user_space(app_id: usize, ptr: usize, len: usize) -> bool {
+    within_app_space(app_id, ptr, len) || USER_STACKS[app_id].contain(ptr, len)
 }
