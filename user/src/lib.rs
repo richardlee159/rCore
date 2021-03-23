@@ -58,6 +58,10 @@ pub fn yield_() -> isize {
     sys_yield()
 }
 
+pub fn set_priority(prio: isize) -> isize {
+    sys_set_priority(prio)
+}
+
 pub fn get_time() -> isize {
     // get time in milliseconds
     let mut ts = TimeVal::new();

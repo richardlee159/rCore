@@ -11,6 +11,8 @@ use lazy_static::lazy_static;
 use switch::__switch;
 use task::{TaskControlBlock, TaskStatus};
 
+const BIT_STRIDE: usize = 65536;
+
 pub struct TaskManager {
     num_app: usize,
     inner: RefCell<TaskManagerInner>,
@@ -29,6 +31,8 @@ lazy_static! {
         let mut tasks = [TaskControlBlock {
             task_ctx_ptr: 0,
             task_status: TaskStatus::UnInit,
+            task_prio: 16,
+            task_stride: 0,
         }; MAX_APP_NUM];
         for i in 0..num_app {
             tasks[i].task_ctx_ptr = init_app_ctx(i) as *const _ as usize;
@@ -68,19 +72,26 @@ impl TaskManager {
     }
 
     fn find_next_task(&self) -> Option<usize> {
+        // find next runnable task in O(n) time
+        // todo: use a binary heap instead
         let inner = self.inner.borrow();
         let current = inner.current_task;
         (current + 1..current + self.num_app + 1)
             .map(|id| id % self.num_app)
-            .find(|id| inner.tasks[*id].task_status == TaskStatus::Ready)
+            .filter(|id| inner.tasks[*id].task_status == TaskStatus::Ready)
+            .min_by_key(|id| inner.tasks[*id].task_stride)
     }
 
     fn run_next_task(&self) {
         if let Some(next) = self.find_next_task() {
             let mut inner = self.inner.borrow_mut();
             let current = inner.current_task;
+            // update status
             inner.tasks[next].task_status = TaskStatus::Running;
             inner.current_task = next;
+            // update stride
+            inner.tasks[next].task_stride += BIT_STRIDE / inner.tasks[next].task_prio;
+            // ready to switch task
             let current_task_ctx_ptr2 = inner.tasks[current].get_task_ctx_ptr2();
             let next_task_ctx_ptr2 = inner.tasks[next].get_task_ctx_ptr2();
             mem::drop(inner);
@@ -90,6 +101,17 @@ impl TaskManager {
             }
         } else {
             panic!("All applications completed!");
+        }
+    }
+
+    fn set_current_prio(&self, prio: isize) -> isize {
+        if prio > 1 {
+            let mut inner = self.inner.borrow_mut();
+            let current = inner.current_task;
+            inner.tasks[current].task_prio = prio as usize;
+            prio
+        } else {
+            -1
         }
     }
 }
@@ -110,4 +132,8 @@ pub fn run_first_task() {
 
 pub fn get_current_task() -> usize {
     TASK_MANAGER.inner.borrow().current_task
+}
+
+pub fn set_current_prio(prio: isize) -> isize {
+    TASK_MANAGER.set_current_prio(prio)
 }
