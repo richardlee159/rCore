@@ -3,14 +3,14 @@ use crate::sbi;
 use riscv::register::time;
 
 const TICKS_PER_SEC: usize = 200;
-const MSEC_PER_SEC: usize = 1000;
+pub const USEC_PER_SEC: usize = 1000000;
 
 fn get_time() -> usize {
     time::read()
 }
 
-pub fn get_time_ms() -> usize {
-    get_time() / (CLOCK_FREQ / MSEC_PER_SEC)
+pub fn get_time_us() -> usize {
+    get_time() / (CLOCK_FREQ / USEC_PER_SEC)
 }
 
 pub fn set_next_trigger() {

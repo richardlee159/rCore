@@ -32,6 +32,18 @@ fn clear_bss() {
     });
 }
 
+#[repr(C)]
+pub struct TimeVal {
+    pub sec: usize,
+    pub usec: usize,
+}
+
+impl TimeVal {
+    pub fn new() -> Self {
+        TimeVal { sec: 0, usec: 0 }
+    }
+}
+
 use syscall::*;
 
 pub fn write(fd: usize, buffer: &[u8]) -> isize {
@@ -47,5 +59,10 @@ pub fn yield_() -> isize {
 }
 
 pub fn get_time() -> isize {
-    sys_get_time()
+    // get time in milliseconds
+    let mut ts = TimeVal::new();
+    match sys_get_time(&mut ts, 0) {
+        0 => (ts.sec * 1000 + ts.usec / 1000) as isize,
+        _ => -1,
+    }
 }
