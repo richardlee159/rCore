@@ -1,8 +1,12 @@
 mod context;
 
 use crate::{
+    config::{TRAMPOLINE, TRAP_CONTEXT},
     syscall::syscall,
-    task::{exit_current_and_run_next, suspend_current_and_run_next},
+    task::{
+        current_trap_ctx, current_user_token, exit_current_and_run_next,
+        suspend_current_and_run_next,
+    },
 };
 pub use context::TrapContext;
 use riscv::register::{
@@ -12,14 +16,18 @@ use riscv::register::{
 };
 
 global_asm!(include_str!("trap.S"));
+global_asm!(
+    "
+    .section .text
+    .globl __ktrap
+    .align 2
+    __ktrap:
+    j trap_from_kernel
+    "
+);
 
 pub fn init() {
-    extern "C" {
-        fn __alltraps();
-    }
-    unsafe {
-        stvec::write(__alltraps as usize, TrapMode::Direct);
-    }
+    set_kernel_trap_entry();
 }
 
 pub fn enable_timer_interrupt() {
@@ -28,8 +36,31 @@ pub fn enable_timer_interrupt() {
     }
 }
 
+fn set_kernel_trap_entry() {
+    extern "C" {
+        fn __ktrap();
+    }
+    unsafe {
+        stvec::write(__ktrap as usize, TrapMode::Direct);
+    }
+}
+
+fn set_user_trap_entry() {
+    unsafe {
+        stvec::write(TRAMPOLINE as usize, TrapMode::Direct);
+    }
+}
+
 #[no_mangle]
-pub fn trap_handler(ctx: &mut TrapContext) -> &mut TrapContext {
+fn trap_from_kernel() -> ! {
+    error!("{:?}, {:#x}", scause::read().cause(), stval::read());
+    panic!("a trap from kernel!");
+}
+
+#[no_mangle]
+fn trap_handler() -> ! {
+    set_kernel_trap_entry();
+    let ctx = current_trap_ctx();
     let scause = scause::read();
     let stval = stval::read();
     match scause.cause() {
@@ -56,5 +87,24 @@ pub fn trap_handler(ctx: &mut TrapContext) -> &mut TrapContext {
             );
         }
     }
-    ctx
+    trap_return();
+}
+
+pub fn trap_return() -> ! {
+    set_user_trap_entry();
+    let trap_ctx_ptr = TRAP_CONTEXT;
+    let user_satp = current_user_token();
+    extern "C" {
+        fn __alltraps();
+        fn __restore();
+    }
+    let restore_va = __restore as usize - __alltraps as usize + TRAMPOLINE;
+    unsafe {
+        llvm_asm!("fence.i" :::: "volatile");
+        llvm_asm!("jr $0"
+            :: "r" (restore_va), "{a0}" (trap_ctx_ptr), "{a1}" (user_satp)
+            :: "volatile"
+        );
+    }
+    panic!("Unreachable in back_to_user!");
 }

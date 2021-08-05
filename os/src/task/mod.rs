@@ -2,10 +2,11 @@ mod context;
 mod switch;
 mod task;
 
-use crate::config::MAX_APP_NUM;
-use crate::loader::{get_num_app, init_app_ctx};
+use crate::loader::{get_app_data, get_num_app};
 use crate::timer::set_next_trigger;
-pub use context::TaskContext;
+use crate::trap::TrapContext;
+use alloc::vec::Vec;
+use context::TaskContext;
 use core::{cell::RefCell, mem};
 use lazy_static::lazy_static;
 use switch::__switch;
@@ -19,7 +20,7 @@ pub struct TaskManager {
 }
 
 struct TaskManagerInner {
-    tasks: [TaskControlBlock; MAX_APP_NUM],
+    tasks: Vec<TaskControlBlock>,
     current_task: usize,
 }
 
@@ -27,16 +28,12 @@ unsafe impl Sync for TaskManager {}
 
 lazy_static! {
     static ref TASK_MANAGER: TaskManager = {
+        info!("init TASK_MANAGER");
         let num_app = get_num_app();
-        let mut tasks = [TaskControlBlock {
-            task_ctx_ptr: 0,
-            task_status: TaskStatus::UnInit,
-            task_prio: 16,
-            task_stride: 0,
-        }; MAX_APP_NUM];
+        info!("num_app = {}", num_app);
+        let mut tasks = Vec::new();
         for i in 0..num_app {
-            tasks[i].task_ctx_ptr = init_app_ctx(i) as *const _ as usize;
-            tasks[i].task_status = TaskStatus::Ready;
+            tasks.push(TaskControlBlock::new(get_app_data(i), i));
         }
         TaskManager {
             num_app,
@@ -114,6 +111,18 @@ impl TaskManager {
             -1
         }
     }
+
+    fn get_current_token(&self) -> usize {
+        let inner = self.inner.borrow();
+        let current = inner.current_task;
+        inner.tasks[current].get_user_token()
+    }
+
+    fn get_current_trap_ctx(&self) -> &mut TrapContext {
+        let inner = self.inner.borrow();
+        let current = inner.current_task;
+        inner.tasks[current].get_trap_ctx()
+    }
 }
 
 pub fn suspend_current_and_run_next() {
@@ -130,10 +139,14 @@ pub fn run_first_task() {
     TASK_MANAGER.run_first_task();
 }
 
-pub fn get_current_task() -> usize {
-    TASK_MANAGER.inner.borrow().current_task
-}
-
 pub fn set_current_prio(prio: isize) -> isize {
     TASK_MANAGER.set_current_prio(prio)
+}
+
+pub fn current_user_token() -> usize {
+    TASK_MANAGER.get_current_token()
+}
+
+pub fn current_trap_ctx() -> &'static mut TrapContext {
+    TASK_MANAGER.get_current_trap_ctx()
 }
