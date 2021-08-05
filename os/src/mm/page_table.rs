@@ -2,6 +2,7 @@ use super::{
     address::{PhysPageNum, StepByOne, VirtAddr, VirtPageNum},
     frame_allocator::{frame_alloc, FrameTracker},
 };
+use crate::config::PAGE_SIZE;
 use alloc::vec;
 use alloc::vec::Vec;
 
@@ -161,6 +162,7 @@ pub fn translated_byte_buffer_mut(
     ptr: *mut u8,
     len: usize,
 ) -> Option<Vec<&'static mut [u8]>> {
+    debug!("translate_byte_buffer ptr:{:#x}, len:{}", ptr as usize, len);
     let page_table = PageTable::from_token(token);
     let mut start = ptr as usize;
     let end = start + len;
@@ -172,7 +174,12 @@ pub fn translated_byte_buffer_mut(
         vpn.step();
         let mut end_va: VirtAddr = vpn.into();
         end_va = end_va.min(VirtAddr::from(end));
-        v.push(&mut ppn.get_bytes_array()[start_va.page_offset()..end_va.page_offset()]);
+        let start_offset = start_va.page_offset();
+        let mut end_offset = end_va.page_offset();
+        if end_offset == 0 {
+            end_offset = PAGE_SIZE
+        }
+        v.push(&mut ppn.get_bytes_array()[start_offset..end_offset]);
         start = end_va.into();
     }
     Some(v)
