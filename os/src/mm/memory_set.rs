@@ -67,7 +67,6 @@ impl MapArea {
         }
     }
 
-    #[allow(unused)]
     fn unmap(&mut self, page_table: &mut PageTable) {
         for vpn in self.vpn_range {
             self.unmap_one(page_table, vpn);
@@ -120,6 +119,10 @@ impl MapArea {
         }
         page_table.unmap(vpn);
     }
+
+    fn overlap(&self, area: &MapArea) -> bool {
+        self.vpn_range.overlap(&area.vpn_range)
+    }
 }
 
 pub struct MemorySet {
@@ -135,25 +138,43 @@ impl MemorySet {
         }
     }
 
-    fn push(&mut self, mut map_area: MapArea, data: Option<&[u8]>) {
+    fn push(&mut self, mut map_area: MapArea, data: Option<&[u8]>) -> Result<(), &'static str> {
+        if self.areas.iter().map(|a| a.overlap(&map_area)).any(|p| p) {
+            return Err("map areas overlap");
+        }
         map_area.map(&mut self.page_table);
         if let Some(data) = data {
             map_area.copy_data(&self.page_table, data);
         }
         self.areas.push(map_area);
+        Ok(())
     }
 
-    /// Assume that no conflicts.
     pub fn insert_framed_area(
         &mut self,
         start_va: VirtAddr,
         end_va: VirtAddr,
         permission: MapPermission,
-    ) {
+    ) -> Result<(), &'static str> {
         self.push(
             MapArea::new(start_va, end_va, MapType::Framed, permission),
             None,
-        );
+        )
+    }
+
+    pub fn delete_framed_area(
+        &mut self,
+        start_va: VirtAddr,
+        end_va: VirtAddr,
+    ) -> Result<(), &'static str> {
+        let range = VPNRange::new(start_va.floor(), end_va.ceil());
+        if let Some(index) = self.areas.iter().position(|a| a.vpn_range == range) {
+            let mut area = self.areas.remove(index);
+            area.unmap(&mut self.page_table);
+            Ok(())
+        } else {
+            Err("no such a map area")
+        }
     }
 
     /// Without kernel stacks.
@@ -178,7 +199,7 @@ impl MemorySet {
                 MapPermission::R | MapPermission::X,
             ),
             None,
-        );
+        ).unwrap();
         info!("mapping .rodata section");
         memory_set.push(
             MapArea::new(
@@ -188,7 +209,7 @@ impl MemorySet {
                 MapPermission::R,
             ),
             None,
-        );
+        ).unwrap();
         info!("mapping .data section");
         memory_set.push(
             MapArea::new(
@@ -198,7 +219,7 @@ impl MemorySet {
                 MapPermission::R | MapPermission::W,
             ),
             None,
-        );
+        ).unwrap();
         info!("mapping .bss section");
         memory_set.push(
             MapArea::new(
@@ -208,7 +229,7 @@ impl MemorySet {
                 MapPermission::R | MapPermission::W,
             ),
             None,
-        );
+        ).unwrap();
         info!("mapping physical memory");
         memory_set.push(
             MapArea::new(
@@ -218,7 +239,7 @@ impl MemorySet {
                 MapPermission::R | MapPermission::W,
             ),
             None,
-        );
+        ).unwrap();
         memory_set
     }
 
@@ -261,7 +282,7 @@ impl MemorySet {
                 memory_set.push(
                     map_area,
                     Some(&elf_data[ph.offset() as usize..(ph.offset() + ph.file_size()) as usize]),
-                );
+                ).unwrap();
             }
         }
         // map user stack with U flag
@@ -272,13 +293,13 @@ impl MemorySet {
             user_stack_bottom.into(),
             user_stack_top.into(),
             MapPermission::R | MapPermission::W | MapPermission::U,
-        );
+        ).unwrap();
         // map TrapContext
         memory_set.insert_framed_area(
             TRAP_CONTEXT.into(),
             TRAMPOLINE.into(),
             MapPermission::R | MapPermission::W,
-        );
+        ).unwrap();
         (
             memory_set,
             user_stack_top,

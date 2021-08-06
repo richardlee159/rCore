@@ -126,7 +126,7 @@ impl StepByOne for VirtPageNum {
     }
 }
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, PartialEq)]
 pub struct SimpleRange<T>
 where
     T: StepByOne + PartialOrd + Copy + Debug,
@@ -147,6 +147,10 @@ where
     }
     pub fn get_end(&self) -> T {
         self.r
+    }
+
+    pub fn overlap(&self, range: &SimpleRange<T>) -> bool {
+        self.l < range.r && range.l < self.r
     }
 }
 impl<T> IntoIterator for SimpleRange<T>

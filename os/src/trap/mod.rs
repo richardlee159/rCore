@@ -71,7 +71,10 @@ fn trap_handler() -> ! {
             ctx.sepc += 4;
             ctx.x[10] = syscall(ctx.x[17], [ctx.x[10], ctx.x[11], ctx.x[12]]) as usize;
         }
-        Trap::Exception(Exception::StoreFault) | Trap::Exception(Exception::StorePageFault) => {
+        Trap::Exception(Exception::LoadFault)
+        | Trap::Exception(Exception::LoadPageFault)
+        | Trap::Exception(Exception::StoreFault)
+        | Trap::Exception(Exception::StorePageFault) => {
             warn!("PageFault in application, core dumped.");
             exit_current_and_run_next();
         }

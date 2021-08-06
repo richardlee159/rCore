@@ -3,6 +3,7 @@ mod switch;
 mod task;
 
 use crate::loader::{get_app_data, get_num_app};
+use crate::mm::{MapPermission, VirtAddr};
 use crate::timer::set_next_trigger;
 use crate::trap::TrapContext;
 use alloc::vec::Vec;
@@ -123,6 +124,31 @@ impl TaskManager {
         let current = inner.current_task;
         inner.tasks[current].get_trap_ctx()
     }
+
+    fn current_insert_framed_area(
+        &self,
+        start_va: VirtAddr,
+        end_va: VirtAddr,
+        permission: MapPermission,
+    ) -> Result<(), &'static str> {
+        let mut inner = self.inner.borrow_mut();
+        let current = inner.current_task;
+        inner.tasks[current]
+            .memory_set
+            .insert_framed_area(start_va, end_va, permission)
+    }
+
+    fn current_delete_framed_area(
+        &self,
+        start_va: VirtAddr,
+        end_va: VirtAddr,
+    ) -> Result<(), &'static str> {
+        let mut inner = self.inner.borrow_mut();
+        let current = inner.current_task;
+        inner.tasks[current]
+            .memory_set
+            .delete_framed_area(start_va, end_va)
+    }
 }
 
 pub fn suspend_current_and_run_next() {
@@ -149,4 +175,19 @@ pub fn current_user_token() -> usize {
 
 pub fn current_trap_ctx() -> &'static mut TrapContext {
     TASK_MANAGER.get_current_trap_ctx()
+}
+
+pub fn current_insert_framed_area(
+    start_va: VirtAddr,
+    end_va: VirtAddr,
+    permission: MapPermission,
+) -> Result<(), &'static str> {
+    TASK_MANAGER.current_insert_framed_area(start_va, end_va, permission)
+}
+
+pub fn current_delete_framed_area(
+    start_va: VirtAddr,
+    end_va: VirtAddr,
+) -> Result<(), &'static str> {
+    TASK_MANAGER.current_delete_framed_area(start_va, end_va)
 }
