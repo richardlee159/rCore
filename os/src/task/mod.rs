@@ -8,7 +8,9 @@ use crate::timer::set_next_trigger;
 use crate::trap::TrapContext;
 use alloc::vec::Vec;
 use context::TaskContext;
-use core::{cell::RefCell, mem};
+use core::cell::{Ref, RefCell, RefMut};
+use core::mem;
+use core::ops::{Deref, DerefMut};
 use lazy_static::lazy_static;
 use switch::__switch;
 use task::{TaskControlBlock, TaskStatus};
@@ -46,10 +48,51 @@ lazy_static! {
     };
 }
 
+struct TaskRef<'b> {
+    inner: Ref<'b, TaskManagerInner>,
+}
+
+struct TaskRefMut<'b> {
+    inner: RefMut<'b, TaskManagerInner>,
+}
+
+impl<'b> Deref for TaskRef<'b> {
+    type Target = TaskControlBlock;
+    fn deref(&self) -> &Self::Target {
+        &self.inner.tasks[self.inner.current_task]
+    }
+}
+
+impl<'b> Deref for TaskRefMut<'b> {
+    type Target = TaskControlBlock;
+    fn deref(&self) -> &Self::Target {
+        &self.inner.tasks[self.inner.current_task]
+    }
+}
+
+impl<'b> DerefMut for TaskRefMut<'b> {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        let current = self.inner.current_task;
+        &mut self.inner.tasks[current]
+    }
+}
+
 impl TaskManager {
+    fn current_task(&self) -> TaskRef {
+        TaskRef {
+            inner: self.inner.borrow(),
+        }
+    }
+
+    fn current_task_mut(&self) -> TaskRefMut {
+        TaskRefMut {
+            inner: self.inner.borrow_mut(),
+        }
+    }
+
     fn run_first_task(&self) {
-        self.inner.borrow_mut().tasks[0].task_status = TaskStatus::Running;
-        let next_task_ctx_ptr2 = self.inner.borrow().tasks[0].get_task_ctx_ptr2();
+        self.current_task_mut().task_status = TaskStatus::Running;
+        let next_task_ctx_ptr2 = self.current_task().get_task_ctx_ptr2();
         let _unused: usize = 0;
         set_next_trigger();
         unsafe {
@@ -58,15 +101,11 @@ impl TaskManager {
     }
 
     fn mark_current_suspended(&self) {
-        let mut inner = self.inner.borrow_mut();
-        let current = inner.current_task;
-        inner.tasks[current].task_status = TaskStatus::Ready;
+        self.current_task_mut().task_status = TaskStatus::Ready;
     }
 
     fn mark_current_exited(&self) {
-        let mut inner = self.inner.borrow_mut();
-        let current = inner.current_task;
-        inner.tasks[current].task_status = TaskStatus::Exited;
+        self.current_task_mut().task_status = TaskStatus::Exited;
     }
 
     fn find_next_task(&self) -> Option<usize> {
@@ -114,9 +153,7 @@ impl TaskManager {
 
     pub fn set_current_prio(&self, prio: isize) -> isize {
         if prio > 1 {
-            let mut inner = self.inner.borrow_mut();
-            let current = inner.current_task;
-            inner.tasks[current].task_prio = prio as usize;
+            self.current_task_mut().task_prio = prio as usize;
             prio
         } else {
             -1
@@ -124,15 +161,11 @@ impl TaskManager {
     }
 
     pub fn get_current_token(&self) -> usize {
-        let inner = self.inner.borrow();
-        let current = inner.current_task;
-        inner.tasks[current].get_user_token()
+        self.current_task().get_user_token()
     }
 
     pub fn get_current_trap_ctx(&self) -> &mut TrapContext {
-        let inner = self.inner.borrow();
-        let current = inner.current_task;
-        inner.tasks[current].get_trap_ctx()
+        self.current_task().get_trap_ctx()
     }
 
     pub fn current_insert_framed_area(
@@ -141,9 +174,7 @@ impl TaskManager {
         end_va: VirtAddr,
         permission: MapPermission,
     ) -> Result<(), &'static str> {
-        let mut inner = self.inner.borrow_mut();
-        let current = inner.current_task;
-        inner.tasks[current]
+        self.current_task_mut()
             .memory_set
             .insert_framed_area(start_va, end_va, permission)
     }
@@ -153,9 +184,7 @@ impl TaskManager {
         start_va: VirtAddr,
         end_va: VirtAddr,
     ) -> Result<(), &'static str> {
-        let mut inner = self.inner.borrow_mut();
-        let current = inner.current_task;
-        inner.tasks[current]
+        self.current_task_mut()
             .memory_set
             .delete_framed_area(start_va, end_va)
     }
