@@ -28,7 +28,7 @@ struct TaskManagerInner {
 unsafe impl Sync for TaskManager {}
 
 lazy_static! {
-    static ref TASK_MANAGER: TaskManager = {
+    pub static ref TASK_MANAGER: TaskManager = {
         info!("init TASK_MANAGER");
         let num_app = get_num_app();
         info!("num_app = {}", num_app);
@@ -102,7 +102,17 @@ impl TaskManager {
         }
     }
 
-    fn set_current_prio(&self, prio: isize) -> isize {
+    pub fn suspend_current_and_run_next(&self) {
+        self.mark_current_suspended();
+        self.run_next_task();
+    }
+
+    pub fn exit_current_and_run_next(&self) {
+        self.mark_current_exited();
+        self.run_next_task();
+    }
+
+    pub fn set_current_prio(&self, prio: isize) -> isize {
         if prio > 1 {
             let mut inner = self.inner.borrow_mut();
             let current = inner.current_task;
@@ -113,19 +123,19 @@ impl TaskManager {
         }
     }
 
-    fn get_current_token(&self) -> usize {
+    pub fn get_current_token(&self) -> usize {
         let inner = self.inner.borrow();
         let current = inner.current_task;
         inner.tasks[current].get_user_token()
     }
 
-    fn get_current_trap_ctx(&self) -> &mut TrapContext {
+    pub fn get_current_trap_ctx(&self) -> &mut TrapContext {
         let inner = self.inner.borrow();
         let current = inner.current_task;
         inner.tasks[current].get_trap_ctx()
     }
 
-    fn current_insert_framed_area(
+    pub fn current_insert_framed_area(
         &self,
         start_va: VirtAddr,
         end_va: VirtAddr,
@@ -138,7 +148,7 @@ impl TaskManager {
             .insert_framed_area(start_va, end_va, permission)
     }
 
-    fn current_delete_framed_area(
+    pub fn current_delete_framed_area(
         &self,
         start_va: VirtAddr,
         end_va: VirtAddr,
@@ -151,43 +161,6 @@ impl TaskManager {
     }
 }
 
-pub fn suspend_current_and_run_next() {
-    TASK_MANAGER.mark_current_suspended();
-    TASK_MANAGER.run_next_task();
-}
-
-pub fn exit_current_and_run_next() {
-    TASK_MANAGER.mark_current_exited();
-    TASK_MANAGER.run_next_task();
-}
-
 pub fn run_first_task() {
     TASK_MANAGER.run_first_task();
-}
-
-pub fn set_current_prio(prio: isize) -> isize {
-    TASK_MANAGER.set_current_prio(prio)
-}
-
-pub fn current_user_token() -> usize {
-    TASK_MANAGER.get_current_token()
-}
-
-pub fn current_trap_ctx() -> &'static mut TrapContext {
-    TASK_MANAGER.get_current_trap_ctx()
-}
-
-pub fn current_insert_framed_area(
-    start_va: VirtAddr,
-    end_va: VirtAddr,
-    permission: MapPermission,
-) -> Result<(), &'static str> {
-    TASK_MANAGER.current_insert_framed_area(start_va, end_va, permission)
-}
-
-pub fn current_delete_framed_area(
-    start_va: VirtAddr,
-    end_va: VirtAddr,
-) -> Result<(), &'static str> {
-    TASK_MANAGER.current_delete_framed_area(start_va, end_va)
 }

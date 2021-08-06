@@ -1,13 +1,13 @@
 use crate::config::PAGE_SIZE;
 use crate::mm::{MapPermission, VirtAddr};
-use crate::task::{current_delete_framed_area, current_insert_framed_area};
+use crate::task::TASK_MANAGER;
 
 const PROT_READ: usize = 0x1;
 const PROT_WRITE: usize = 0x2;
 const PROT_EXEC: usize = 0x4;
 const PROT_ALL: usize = PROT_READ | PROT_WRITE | PROT_EXEC;
 
-fn ceil (num: usize, bound: usize) -> usize {
+fn ceil(num: usize, bound: usize) -> usize {
     (num + bound - 1) / bound * bound
 }
 
@@ -36,7 +36,7 @@ pub fn mmap(start: usize, len: usize, prot: usize) -> isize {
     }
     if let Some(permission) = get_map_permission(prot) {
         let end_va = VirtAddr::from(start + len);
-        if let Err(e) = current_insert_framed_area(start_va, end_va, permission) {
+        if let Err(e) = TASK_MANAGER.current_insert_framed_area(start_va, end_va, permission) {
             warn!("{}", e);
             -1
         } else {
@@ -55,7 +55,7 @@ pub fn munmap(start: usize, len: usize) -> isize {
         return -1;
     }
     let end_va = VirtAddr::from(start + len);
-    if let Err(e) = current_delete_framed_area(start_va, end_va) {
+    if let Err(e) = TASK_MANAGER.current_delete_framed_area(start_va, end_va) {
         warn!("{}", e);
         -1
     } else {

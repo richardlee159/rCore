@@ -1,5 +1,5 @@
 use crate::mm::translated_byte_buffer_copy;
-use crate::task::current_user_token;
+use crate::task::TASK_MANAGER;
 use crate::timer::{get_time_us, USEC_PER_SEC};
 use core::{mem, slice};
 
@@ -24,7 +24,7 @@ pub fn sys_get_time(ts: *mut TimeVal, _tz: usize) -> isize {
         usec: tims_us % USEC_PER_SEC,
     };
     if translated_byte_buffer_copy(
-        current_user_token(),
+        TASK_MANAGER.get_current_token(),
         ts as *mut u8,
         mem::size_of::<TimeVal>(),
         time_val.as_bytes(),

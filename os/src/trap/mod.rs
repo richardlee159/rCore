@@ -3,10 +3,7 @@ mod context;
 use crate::{
     config::{TRAMPOLINE, TRAP_CONTEXT},
     syscall::syscall,
-    task::{
-        current_trap_ctx, current_user_token, exit_current_and_run_next,
-        suspend_current_and_run_next,
-    },
+    task::TASK_MANAGER,
 };
 pub use context::TrapContext;
 use riscv::register::{
@@ -60,12 +57,12 @@ fn trap_from_kernel() -> ! {
 #[no_mangle]
 fn trap_handler() -> ! {
     set_kernel_trap_entry();
-    let ctx = current_trap_ctx();
+    let ctx = TASK_MANAGER.get_current_trap_ctx();
     let scause = scause::read();
     let stval = stval::read();
     match scause.cause() {
         Trap::Interrupt(Interrupt::SupervisorTimer) => {
-            suspend_current_and_run_next();
+            TASK_MANAGER.suspend_current_and_run_next();
         }
         Trap::Exception(Exception::UserEnvCall) => {
             ctx.sepc += 4;
@@ -76,11 +73,11 @@ fn trap_handler() -> ! {
         | Trap::Exception(Exception::StoreFault)
         | Trap::Exception(Exception::StorePageFault) => {
             warn!("PageFault in application, core dumped.");
-            exit_current_and_run_next();
+            TASK_MANAGER.exit_current_and_run_next();
         }
         Trap::Exception(Exception::IllegalInstruction) => {
             warn!("IllegalInstruction in application, core dumped.");
-            exit_current_and_run_next();
+            TASK_MANAGER.exit_current_and_run_next();
         }
         _ => {
             panic!(
@@ -96,7 +93,7 @@ fn trap_handler() -> ! {
 pub fn trap_return() -> ! {
     set_user_trap_entry();
     let trap_ctx_ptr = TRAP_CONTEXT;
-    let user_satp = current_user_token();
+    let user_satp = TASK_MANAGER.get_current_token();
     extern "C" {
         fn __alltraps();
         fn __restore();
