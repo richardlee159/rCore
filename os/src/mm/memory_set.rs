@@ -73,26 +73,26 @@ impl MapArea {
         }
     }
 
-    /// data: start-aligned but maybe with shorter length
     /// assume that all frames were cleared before
-    fn copy_data(&mut self, page_table: &PageTable, data: &[u8]) {
+    fn copy_data(&mut self, page_table: &PageTable, data: &[u8], mut offset: usize) {
         assert_eq!(self.map_type, MapType::Framed);
         let mut start = 0;
         let mut current_vpn = self.vpn_range.get_start();
         let len = data.len();
         loop {
-            let src = &data[start..len.min(start + PAGE_SIZE)];
+            let src = &data[start..len.min(start + PAGE_SIZE - offset)];
             let dst = &mut page_table
                 .translate(current_vpn)
                 .unwrap()
                 .ppn()
-                .get_bytes_array()[..src.len()];
+                .get_bytes_array()[offset..src.len() + offset];
             dst.copy_from_slice(src);
-            start += PAGE_SIZE;
+            start += PAGE_SIZE - offset;
             if start >= len {
                 break;
             }
             current_vpn.step();
+            offset = 0;
         }
     }
 
@@ -138,13 +138,17 @@ impl MemorySet {
         }
     }
 
-    fn push(&mut self, mut map_area: MapArea, data: Option<&[u8]>) -> Result<(), &'static str> {
+    fn push(
+        &mut self,
+        mut map_area: MapArea,
+        data: Option<(&[u8], usize)>,
+    ) -> Result<(), &'static str> {
         if self.areas.iter().map(|a| a.overlap(&map_area)).any(|p| p) {
             return Err("map areas overlap");
         }
         map_area.map(&mut self.page_table);
-        if let Some(data) = data {
-            map_area.copy_data(&self.page_table, data);
+        if let Some((data, offset)) = data {
+            map_area.copy_data(&self.page_table, data, offset);
         }
         self.areas.push(map_area);
         Ok(())
@@ -292,10 +296,11 @@ impl MemorySet {
                 memory_set
                     .push(
                         map_area,
-                        Some(
+                        Some((
                             &elf_data
                                 [ph.offset() as usize..(ph.offset() + ph.file_size()) as usize],
-                        ),
+                            start_va.page_offset(),
+                        )),
                     )
                     .unwrap();
             }
