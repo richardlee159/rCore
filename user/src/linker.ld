@@ -24,10 +24,8 @@ SECTIONS
     }
 
     .bss : {
-        start_bss = .;
         *(.bss .bss.*)
         *(.sbss .sbss.*)
-        end_bss = .;
     }
 
     /DISCARD/ : {
