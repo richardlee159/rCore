@@ -1,9 +1,13 @@
 use alloc::sync::Arc;
 
-use crate::{loader::get_app_data_by_name, mm::{translated_refmut, translated_str}, task::{
+use crate::{
+    loader::get_app_data_by_name,
+    mm::{translated_refmut, translated_str},
+    task::{
         add_task, current_task, current_user_token, exit_current_and_run_next, set_current_prio,
         suspend_current_and_run_next,
-    }};
+    },
+};
 
 pub fn sys_exit(exit_code: i32) -> ! {
     exit_current_and_run_next(exit_code);
@@ -26,7 +30,7 @@ pub fn sys_getpid() -> isize {
 pub fn sys_fork() -> isize {
     let current_task = current_task().unwrap();
     let new_task = current_task.fork();
-    let new_pid = new_task.pid.0;
+    let new_pid = new_task.getpid();
     // modify trap context of new_task, because it returns immediately after switching
     // for child process, fork returns 0
     new_task.acquire_inner_lock().get_trap_ctx().x[10] = 0;
@@ -43,9 +47,11 @@ pub fn sys_exec(path: *const u8) -> isize {
             task.exec(elf_data);
             0
         } else {
+            warn!("No such application name.");
             -1
         }
     } else {
+        warn!("Illegal memory region in sys_exec!");
         -1
     }
 }
@@ -73,7 +79,7 @@ pub fn sys_waitpid(pid: isize, exit_code_ptr: *mut i32) -> isize {
         // confirm that child will be deallocated after removing from children list
         assert_eq!(Arc::strong_count(&child), 1);
         let found_pid = child.getpid();
-        let exit_code =child.acquire_inner_lock().exit_code;
+        let exit_code = child.acquire_inner_lock().exit_code;
         if let Some(refmut) = translated_refmut(inner.get_user_token(), exit_code_ptr) {
             *refmut = exit_code;
             found_pid as isize
@@ -86,4 +92,23 @@ pub fn sys_waitpid(pid: isize, exit_code_ptr: *mut i32) -> isize {
         -2
     }
     // ---- release current PCB lock automatically
+}
+
+pub fn sys_spawn(path: *const u8) -> isize {
+    let token = current_user_token();
+    if let Some(path) = translated_str(token, path) {
+        if let Some(elf_data) = get_app_data_by_name(&path) {
+            let current_task = current_task().unwrap();
+            let new_task = current_task.spawn_child(elf_data);
+            let new_pid = new_task.getpid();
+            add_task(new_task);
+            new_pid as isize
+        } else {
+            warn!("No such application name.");
+            -1
+        }
+    } else {
+        warn!("Illegal memory region in sys_spawn!");
+        -1
+    }
 }

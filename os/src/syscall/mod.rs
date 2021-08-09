@@ -10,6 +10,7 @@ const SYSCALL_FORK: usize = 220;
 const SYSCALL_EXEC: usize = 221;
 const SYSCALL_MMAP: usize = 222;
 const SYSCALL_WAITPID: usize = 260;
+const SYSCALL_SPAWN: usize = 400;
 
 mod fs;
 mod memory;
@@ -30,6 +31,7 @@ pub fn syscall(id: usize, args: [usize; 3]) -> isize {
         SYSCALL_EXEC => process::sys_exec(args[0] as *const u8),
         SYSCALL_MMAP => memory::mmap(args[0], args[1], args[2]),
         SYSCALL_WAITPID => process::sys_waitpid(args[0] as isize, args[1] as *mut i32),
+        SYSCALL_SPAWN => process::sys_spawn(args[0] as *const u8),
         _ => panic!("Unsupported syscall id: {}", id),
     }
 }

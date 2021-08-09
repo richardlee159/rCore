@@ -165,4 +165,11 @@ impl TaskControlBlock {
             TrapContext::app_init_context(entry_point, user_sp, self.kernel_stack.get_top());
         // **** release current PCB lock
     }
+
+    pub fn spawn_child(self: &Arc<Self>, elf_data: &[u8]) -> Arc<Self> {
+        let task_control_block = Arc::new(TaskControlBlock::new(elf_data));
+        task_control_block.acquire_inner_lock().parent = Some(Arc::downgrade(self));
+        self.acquire_inner_lock().children.push(task_control_block.clone());
+        task_control_block
+    }
 }
