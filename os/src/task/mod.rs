@@ -18,43 +18,6 @@ pub use processor::{
     current_task, current_trap_ctx, current_user_token, run_tasks, take_current_task,
 };
 
-// const BIT_STRIDE: usize = 65536;
-
-// impl TaskManager {
-//     fn find_next_task(&self) -> Option<usize> {
-//         // find next runnable task in O(n) time
-//         // todo: use a binary heap instead
-//         let inner = self.inner.borrow();
-//         let current = inner.current_task;
-//         (current + 1..current + self.num_app + 1)
-//             .map(|id| id % self.num_app)
-//             .filter(|id| inner.tasks[*id].task_status == TaskStatus::Ready)
-//             .min_by_key(|id| inner.tasks[*id].task_stride)
-//     }
-
-//     fn run_next_task(&self) {
-//         if let Some(next) = self.find_next_task() {
-//             let mut inner = self.inner.borrow_mut();
-//             let current = inner.current_task;
-//             // update status
-//             inner.tasks[next].task_status = TaskStatus::Running;
-//             inner.current_task = next;
-//             // update stride
-//             inner.tasks[next].task_stride += BIT_STRIDE / inner.tasks[next].task_prio;
-//             // ready to switch task
-//             let current_task_ctx_ptr2 = inner.tasks[current].get_task_ctx_ptr2();
-//             let next_task_ctx_ptr2 = inner.tasks[next].get_task_ctx_ptr2();
-//             mem::drop(inner);
-//             set_next_trigger();
-//             unsafe {
-//                 __switch(current_task_ctx_ptr2, next_task_ctx_ptr2);
-//             }
-//         } else {
-//             panic!("All applications completed!");
-//         }
-//     }
-// }
-
 pub fn suspend_current_and_run_next() {
     // There must be an application running.
     let task = take_current_task().unwrap();
