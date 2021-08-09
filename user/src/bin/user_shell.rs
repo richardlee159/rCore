@@ -24,7 +24,7 @@ pub fn main() -> i32 {
                 println!("");
                 if !line.is_empty() {
                     match line.as_str() {
-                        "exit" => {
+                        "quit" => {
                             exit(0);
                         }
                         _ => {

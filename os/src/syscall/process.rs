@@ -19,6 +19,10 @@ pub fn sys_set_priority(prio: isize) -> isize {
     set_current_prio(prio)
 }
 
+pub fn sys_getpid() -> isize {
+    current_task().unwrap().getpid() as isize
+}
+
 pub fn sys_fork() -> isize {
     let current_task = current_task().unwrap();
     let new_task = current_task.fork();

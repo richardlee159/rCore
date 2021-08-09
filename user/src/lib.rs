@@ -83,6 +83,10 @@ pub fn get_time() -> isize {
     }
 }
 
+pub fn getpid() -> isize {
+    sys_getpid()
+}
+
 pub fn fork() -> isize {
     sys_fork()
 }
@@ -104,5 +108,12 @@ pub fn waitpid(pid: isize, exit_code: &mut i32) -> isize {
             // -1 or a real pid
             exit_pid => return exit_pid,
         }
+    }
+}
+
+pub fn sleep(period_ms: usize) {
+    let start = get_time();
+    while get_time() < start + period_ms as isize {
+        yield_();
     }
 }
