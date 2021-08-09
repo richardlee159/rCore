@@ -1,9 +1,16 @@
+use crate::{read, write};
 use core::fmt::{self, Write};
-use crate::write;
+
+const STDIN: usize = 0;
+const STDOUT: usize = 1;
+
+pub fn getchar() -> u8 {
+    let mut c = [0];
+    read(STDIN, &mut c);
+    c[0]
+}
 
 struct Stdout;
-
-const STDOUT: usize = 1;
 
 impl Write for Stdout {
     fn write_str(&mut self, s: &str) -> fmt::Result {

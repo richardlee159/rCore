@@ -2,7 +2,7 @@ use super::page_table::PageTableEntry;
 use crate::config::{PAGE_SIZE, PAGE_SIZE_BITS};
 use core::{
     fmt::{self, Debug, Formatter},
-    slice,
+    mem, slice,
 };
 use derive_more::{From, Into};
 
@@ -77,6 +77,14 @@ impl PhysAddr {
     pub fn aligned(&self) -> bool {
         self.page_offset() == 0
     }
+    pub fn get_mut<T>(&self) -> &'static mut T {
+        let next_page_start_pa: PhysAddr = PhysAddr::from(self.0 + PAGE_SIZE).floor().into();
+        assert!(
+            self.0 + mem::size_of::<T>() <= next_page_start_pa.0,
+            "memory access crosses page boundary!"
+        );
+        unsafe { (self.0 as *mut T).as_mut().unwrap() }
+    }
 }
 impl From<PhysAddr> for PhysPageNum {
     fn from(v: PhysAddr) -> Self {
@@ -113,7 +121,7 @@ impl PhysPageNum {
     }
     pub fn get_mut<T>(&self) -> &'static mut T {
         let pa: PhysAddr = self.clone().into();
-        unsafe { (pa.0 as *mut T).as_mut().unwrap() }
+        pa.get_mut()
     }
 }
 

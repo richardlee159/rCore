@@ -60,7 +60,6 @@ fn trap_from_kernel() -> ! {
 #[no_mangle]
 fn trap_handler() -> ! {
     set_kernel_trap_entry();
-    let ctx = current_trap_ctx();
     let scause = scause::read();
     let stval = stval::read();
     match scause.cause() {
@@ -68,19 +67,27 @@ fn trap_handler() -> ! {
             suspend_current_and_run_next();
         }
         Trap::Exception(Exception::UserEnvCall) => {
+            let mut ctx = current_trap_ctx();
+            // jump to next instruction anyway
             ctx.sepc += 4;
-            ctx.x[10] = syscall(ctx.x[17], [ctx.x[10], ctx.x[11], ctx.x[12]]) as usize;
+            // get system call return value
+            let result = syscall(ctx.x[17], [ctx.x[10], ctx.x[11], ctx.x[12]]);
+            // ctx is changed during sys_exec, so we have to call it again
+            ctx = current_trap_ctx();
+            ctx.x[10] = result as usize;
         }
         Trap::Exception(Exception::LoadFault)
         | Trap::Exception(Exception::LoadPageFault)
         | Trap::Exception(Exception::StoreFault)
         | Trap::Exception(Exception::StorePageFault) => {
             warn!("PageFault in application, core dumped.");
-            exit_current_and_run_next();
+            // page fault exit code
+            exit_current_and_run_next(-2);
         }
         Trap::Exception(Exception::IllegalInstruction) => {
             warn!("IllegalInstruction in application, core dumped.");
-            exit_current_and_run_next();
+            // illegal instruction exit code
+            exit_current_and_run_next(-3);
         }
         _ => {
             panic!(

@@ -7,7 +7,8 @@ mod page_table;
 pub use address::{PhysAddr, PhysPageNum, VirtAddr, VirtPageNum};
 pub use memory_set::{MapPermission, MemorySet, KERNEL_SPACE};
 pub use page_table::{
-    translated_byte_buffer, translated_byte_buffer_copy, translated_byte_buffer_mut, PageTableEntry,
+    translated_byte_buffer, translated_byte_buffer_copy, translated_byte_buffer_mut,
+    translated_refmut, translated_str, PageTableEntry,
 };
 
 pub fn init() {

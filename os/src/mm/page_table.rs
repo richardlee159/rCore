@@ -1,10 +1,10 @@
 use super::{
-    address::{PhysPageNum, StepByOne, VirtAddr, VirtPageNum},
+    address::{PhysAddr, PhysPageNum, StepByOne, VirtAddr, VirtPageNum},
     frame_allocator::{frame_alloc, FrameTracker},
 };
 use crate::config::PAGE_SIZE;
-use alloc::vec;
 use alloc::vec::Vec;
+use alloc::{string::String, vec};
 
 bitflags! {
     pub struct PTEFlags: u8 {
@@ -105,6 +105,14 @@ impl PageTable {
         self.find_pte(vpn).map(|pte| pte.clone())
     }
 
+    pub fn translate_va(&self, va: VirtAddr) -> Option<PhysAddr> {
+        self.find_pte(va.floor()).map(|pte| {
+            let aligned_pa: PhysAddr = pte.ppn().into();
+            let offset = va.page_offset();
+            (aligned_pa.0 + offset).into()
+        })
+    }
+
     fn find_pte_create(&mut self, vpn: VirtPageNum) -> Option<&mut PageTableEntry> {
         let idx = vpn.indexes();
         let mut ppn = self.root_ppn;
@@ -198,4 +206,26 @@ pub fn translated_byte_buffer_copy(
         start += buf.len();
     }
     Some(len)
+}
+
+pub fn translated_str(token: usize, ptr: *const u8) -> Option<String> {
+    let page_table = PageTable::from_token(token);
+    let mut string = String::new();
+    let mut va = VirtAddr::from(ptr as usize);
+    loop {
+        let ch = *(page_table.translate_va(va)?.get_mut::<u8>());
+        if ch == 0 {
+            break;
+        } else {
+            string.push(ch as char);
+            va.0 += 1;
+        }
+    }
+    Some(string)
+}
+
+pub fn translated_refmut<T>(token: usize, ptr: *mut T) -> Option<&'static mut T> {
+    let page_table = PageTable::from_token(token);
+    let va = VirtAddr::from(ptr as usize);
+    Some(page_table.translate_va(va)?.get_mut())
 }

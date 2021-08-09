@@ -2,6 +2,7 @@ use super::{
     address::{PhysAddr, PhysPageNum, StepByOne, VPNRange, VirtAddr, VirtPageNum},
     frame_allocator::{frame_alloc, FrameTracker},
     page_table::{PTEFlags, PageTable},
+    PageTableEntry,
 };
 use crate::config::{MEMORY_END, PAGE_SIZE, TRAMPOLINE, TRAP_CONTEXT, USER_STACK_SIZE};
 use alloc::{collections::BTreeMap, vec::Vec};
@@ -22,7 +23,7 @@ extern "C" {
     fn strampoline();
 }
 
-#[derive(PartialEq, Debug)]
+#[derive(PartialEq, Debug, Clone, Copy)]
 enum MapType {
     Identical,
     Framed,
@@ -58,6 +59,13 @@ impl MapArea {
             data_frames: BTreeMap::new(),
             map_type,
             map_perm,
+        }
+    }
+
+    fn from_another(another: &Self) -> Self {
+        Self {
+            data_frames: BTreeMap::new(),
+            ..*another
         }
     }
 
@@ -179,6 +187,29 @@ impl MemorySet {
         } else {
             Err("no such a map area")
         }
+    }
+
+    pub fn remove_area_with_start_vpn(&mut self, start_vpn: VirtPageNum) -> Result<(), &'static str> {
+        if let Some(index) = self
+            .areas
+            .iter()
+            .position(|area| area.vpn_range.get_start() == start_vpn)
+        {
+            let mut area = self.areas.remove(index);
+            area.unmap(&mut self.page_table);
+            Ok(())
+        } else {
+            Err("no such a map area")
+        }
+    }
+
+    /// Mention that trampoline is not collected by areas.
+    fn map_trampoline(&mut self) {
+        self.page_table.map(
+            VirtAddr::from(TRAMPOLINE).into(),
+            PhysAddr::from(strampoline as usize).into(),
+            PTEFlags::R | PTEFlags::X,
+        )
     }
 
     /// Without kernel stacks.
@@ -331,13 +362,28 @@ impl MemorySet {
         )
     }
 
-    /// Mention that trampoline is not collected by areas.
-    fn map_trampoline(&mut self) {
-        self.page_table.map(
-            VirtAddr::from(TRAMPOLINE).into(),
-            PhysAddr::from(strampoline as usize).into(),
-            PTEFlags::R | PTEFlags::X,
-        )
+    pub fn from_existed_user(user_space: &Self) -> Self {
+        let mut memory_set = MemorySet::new_bare();
+        // map trampoline
+        memory_set.map_trampoline();
+        // copy data sections/trap_context/user_stack
+        for area in &user_space.areas {
+            let new_area = MapArea::from_another(area);
+            memory_set.push(new_area, None).unwrap();
+            // copy data from another space
+            for vpn in area.vpn_range {
+                let src_ppn = user_space.translate(vpn).unwrap().ppn();
+                let dst_ppn = memory_set.translate(vpn).unwrap().ppn();
+                dst_ppn
+                    .get_bytes_array()
+                    .copy_from_slice(src_ppn.get_bytes_array());
+            }
+        }
+        memory_set
+    }
+
+    pub fn translate(&self, vpn: VirtPageNum) -> Option<PageTableEntry> {
+        self.page_table.translate(vpn)
     }
 
     pub fn activate(&self) {
@@ -346,6 +392,10 @@ impl MemorySet {
         unsafe {
             llvm_asm!("sfence.vma" :::: "volatile");
         }
+    }
+
+    pub fn recycle_data_pages(&mut self) {
+        self.areas.clear();
     }
 }
 
