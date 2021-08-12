@@ -13,7 +13,7 @@ use lazy_static::lazy_static;
 use processor::schedule;
 use task::{TaskControlBlock, TaskStatus};
 
-pub use manager::add_task;
+pub use manager::{add_task, get_task_by_pid};
 pub use processor::{
     current_task, current_trap_ctx, current_user_token, run_tasks, take_current_task,
 };

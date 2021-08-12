@@ -4,7 +4,7 @@ use super::{
 };
 use crate::{
     config::TRAP_CONTEXT,
-    fs::{File, STDIN, STDOUT},
+    fs::{File, MailBox, STDIN, STDOUT},
     mm::{MemorySet, PhysPageNum, VirtAddr},
     trap::TrapContext,
 };
@@ -34,6 +34,7 @@ pub struct TaskControlBlockInner {
     pub children: Vec<Arc<TaskControlBlock>>,
     pub exit_code: i32,
     pub fd_table: Vec<Option<Arc<dyn File>>>,
+    pub mailbox: MailBox,
 }
 
 impl TaskControlBlockInner {
@@ -112,6 +113,7 @@ impl TaskControlBlock {
                     Some(Arc::new(STDOUT)),
                     Some(Arc::new(STDOUT)),
                 ],
+                mailbox: MailBox::new(),
             }),
         };
         // prepare TrapContext in user space
@@ -150,6 +152,7 @@ impl TaskControlBlock {
                 children: Vec::new(),
                 exit_code: 0,
                 fd_table: parent_inner.fd_table.clone(),
+                mailbox: MailBox::new(),
             }),
         });
         // add child

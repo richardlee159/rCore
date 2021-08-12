@@ -1,7 +1,9 @@
+mod mailbox;
 mod pipe;
 mod stdio;
 
 use crate::mm::UserBuffer;
+pub use mailbox::MailBox;
 pub use pipe::make_pipe;
 pub use stdio::{STDIN, STDOUT};
 

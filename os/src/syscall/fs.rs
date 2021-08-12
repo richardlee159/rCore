@@ -1,6 +1,6 @@
-use crate::fs::make_pipe;
+use crate::fs::{make_pipe, File};
 use crate::mm::{translated_byte_buffer, translated_refmut, UserBuffer};
-use crate::task::{current_task, current_user_token};
+use crate::task::{current_task, current_user_token, get_task_by_pid};
 
 pub fn sys_close(fd: usize) -> isize {
     let task = current_task().unwrap();
@@ -65,6 +65,46 @@ pub fn sys_write(fd: usize, buf: *const u8, len: usize) -> isize {
         }
     } else {
         warn!("Invalid fd in sys_write!");
+        -1
+    }
+}
+
+pub fn sys_mailread(buf: *mut u8, len: usize) -> isize {
+    let token = current_user_token();
+    let task = current_task().unwrap();
+    let inner = task.acquire_inner_lock();
+    let mailbox = &inner.mailbox;
+    if mailbox.is_empty() {
+        return -1;
+    }
+    if len == 0 {
+        return 0;
+    }
+    if let Some(buffers) = translated_byte_buffer(token, buf, len) {
+        mailbox.read(UserBuffer::new(buffers)) as isize
+    } else {
+        -1
+    }
+}
+
+pub fn sys_mailwrite(pid: usize, buf: *mut u8, len: usize) -> isize {
+    let token = current_user_token();
+    let task = if current_task().unwrap().getpid() == pid {
+        current_task().unwrap()
+    } else {
+        get_task_by_pid(pid).unwrap()
+    };
+    let inner = task.acquire_inner_lock();
+    let mailbox = &inner.mailbox;
+    if mailbox.is_full() {
+        return -1;
+    }
+    if len == 0 {
+        return 0;
+    }
+    if let Some(buffers) = translated_byte_buffer(token, buf, len) {
+        mailbox.write(UserBuffer::new(buffers)) as isize
+    } else {
         -1
     }
 }
