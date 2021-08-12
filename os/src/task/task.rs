@@ -4,11 +4,13 @@ use super::{
 };
 use crate::{
     config::TRAP_CONTEXT,
+    fs::{File, STDIN, STDOUT},
     mm::{MemorySet, PhysPageNum, VirtAddr},
     trap::TrapContext,
 };
 use alloc::{
     sync::{Arc, Weak},
+    vec,
     vec::Vec,
 };
 use spin::{Mutex, MutexGuard};
@@ -31,6 +33,7 @@ pub struct TaskControlBlockInner {
     pub parent: Option<Weak<TaskControlBlock>>,
     pub children: Vec<Arc<TaskControlBlock>>,
     pub exit_code: i32,
+    pub fd_table: Vec<Option<Arc<dyn File>>>,
 }
 
 impl TaskControlBlockInner {
@@ -48,6 +51,15 @@ impl TaskControlBlockInner {
 
     pub fn is_zombie(&self) -> bool {
         self.task_status == TaskStatus::Zombie
+    }
+
+    pub fn alloc_fd(&mut self) -> usize {
+        if let Some(fd) = self.fd_table.iter().position(|f| f.is_none()) {
+            fd
+        } else {
+            self.fd_table.push(None);
+            self.fd_table.len() - 1
+        }
     }
 }
 
@@ -95,6 +107,11 @@ impl TaskControlBlock {
                 parent: None,
                 children: Vec::new(),
                 exit_code: 0,
+                fd_table: vec![
+                    Some(Arc::new(STDIN)),
+                    Some(Arc::new(STDOUT)),
+                    Some(Arc::new(STDOUT)),
+                ],
             }),
         };
         // prepare TrapContext in user space
@@ -132,6 +149,7 @@ impl TaskControlBlock {
                 parent: Some(Arc::downgrade(self)),
                 children: Vec::new(),
                 exit_code: 0,
+                fd_table: parent_inner.fd_table.clone(),
             }),
         });
         // add child
@@ -169,7 +187,9 @@ impl TaskControlBlock {
     pub fn spawn_child(self: &Arc<Self>, elf_data: &[u8]) -> Arc<Self> {
         let task_control_block = Arc::new(TaskControlBlock::new(elf_data));
         task_control_block.acquire_inner_lock().parent = Some(Arc::downgrade(self));
-        self.acquire_inner_lock().children.push(task_control_block.clone());
+        self.acquire_inner_lock()
+            .children
+            .push(task_control_block.clone());
         task_control_block
     }
 }

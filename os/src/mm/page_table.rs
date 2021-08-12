@@ -3,8 +3,7 @@ use super::{
     frame_allocator::{frame_alloc, FrameTracker},
 };
 use crate::config::PAGE_SIZE;
-use alloc::vec::Vec;
-use alloc::{string::String, vec};
+use alloc::{string::String, vec, vec::Vec};
 
 bitflags! {
     pub struct PTEFlags: u8 {
@@ -156,19 +155,6 @@ pub fn translated_byte_buffer(
     token: usize,
     ptr: *const u8,
     len: usize,
-) -> Option<Vec<&'static [u8]>> {
-    Some(
-        translated_byte_buffer_mut(token, ptr as *mut u8, len)?
-            .into_iter()
-            .map(|buffer| &buffer[..])
-            .collect(),
-    )
-}
-
-pub fn translated_byte_buffer_mut(
-    token: usize,
-    ptr: *mut u8,
-    len: usize,
 ) -> Option<Vec<&'static mut [u8]>> {
     debug!("translate_byte_buffer ptr:{:#x}, len:{}", ptr as usize, len);
     let page_table = PageTable::from_token(token);
@@ -201,7 +187,7 @@ pub fn translated_byte_buffer_copy(
 ) -> Option<usize> {
     assert_eq!(len, data.len());
     let mut start = 0;
-    for buf in translated_byte_buffer_mut(token, ptr, len)? {
+    for buf in translated_byte_buffer(token, ptr, len)? {
         buf.copy_from_slice(&data[start..start + buf.len()]);
         start += buf.len();
     }
@@ -228,4 +214,54 @@ pub fn translated_refmut<T>(token: usize, ptr: *mut T) -> Option<&'static mut T>
     let page_table = PageTable::from_token(token);
     let va = VirtAddr::from(ptr as usize);
     Some(page_table.translate_va(va)?.get_mut())
+}
+
+pub struct UserBuffer {
+    pub buffers: Vec<&'static mut [u8]>,
+}
+
+impl UserBuffer {
+    pub fn new(buffers: Vec<&'static mut [u8]>) -> Self {
+        Self { buffers }
+    }
+
+    pub fn len(&self) -> usize {
+        self.buffers.iter().map(|b| b.len()).sum()
+    }
+}
+
+impl IntoIterator for UserBuffer {
+    type Item = *mut u8;
+    type IntoIter = UserBufferIterator;
+    fn into_iter(self) -> Self::IntoIter {
+        UserBufferIterator {
+            buffers: self.buffers,
+            current_buffer: 0,
+            current_idx: 0,
+        }
+    }
+}
+
+pub struct UserBufferIterator {
+    buffers: Vec<&'static mut [u8]>,
+    current_buffer: usize,
+    current_idx: usize,
+}
+
+impl Iterator for UserBufferIterator {
+    type Item = *mut u8;
+    fn next(&mut self) -> Option<Self::Item> {
+        if self.current_buffer >= self.buffers.len() {
+            None
+        } else {
+            let r = &mut self.buffers[self.current_buffer][self.current_idx] as *mut _;
+            if self.current_idx + 1 == self.buffers[self.current_buffer].len() {
+                self.current_idx = 0;
+                self.current_buffer += 1;
+            } else {
+                self.current_idx += 1;
+            }
+            Some(r)
+        }
+    }
 }
